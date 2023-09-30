@@ -12,7 +12,7 @@
 
 ## usage 
   - add your just file
-  - > giust
+  - > vtjust
 
 ## example
 
