@@ -137,7 +137,6 @@ justWidget
     => m ()
 justWidget =
     color green
-        $ boxTitle (pure singleBoxStyle) "just"
         $ row
         $ do
             rec o <- fmap (Map.fromList . zip [0 ..] . addLetters) <$> getJust

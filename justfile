@@ -47,3 +47,6 @@ git-push-force:
     bash -c "git push --force origin HEAD"
 cabal-install:
     cabal install --overwrite-policy=always
+git-reset-devel:
+    git checkout devel
+    git reset --hard main
