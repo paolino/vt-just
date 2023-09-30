@@ -1,14 +1,17 @@
 {-# LANGUAGE BlockArguments #-}
+{-# LANGUAGE ImportQualifiedPost #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE NoMonomorphismRestriction #-}
 
 module Command where
 
+import Control.Concurrent (forkIO)
+import Control.Monad (void)
 import Control.Monad.Fix (MonadFix)
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Data.Kind (Type)
-import Data.Text (Text, intercalate, intersperse, pack)
-import qualified Data.Text.IO as T
+import Data.Text (Text, intercalate, pack)
+import Data.Text.IO qualified as T
 import Data.Time (getCurrentTime)
 import Reflex
     ( MonadHold
@@ -70,7 +73,7 @@ runCommandS s f = do
     g _ (Just out) (Just err) _ = f out err
     g _ _ _ _ = error "runCommandS: unexpected"
 
-data Messages = Messages Text [Text]
+data Messages = Messages !Text ![Text]
 
 appendToMessages :: Text -> Messages -> Messages
 appendToMessages x (Messages y ys) = Messages (y <> "\n" <> x) ys
@@ -111,7 +114,7 @@ accumHandle eh = do
                         l <- T.hGetLine h
                         t $ Right l
                         loop
-        liftIO loop
+        void $ liftIO $ forkIO loop
     msgs <-
         foldDyn
             do
