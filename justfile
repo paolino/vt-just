@@ -50,3 +50,5 @@ cabal-install:
 git-reset-devel:
     git checkout devel
     git reset --hard main
+stg-clean:
+    stg clean
