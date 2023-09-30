@@ -41,6 +41,8 @@ git-status:
     git status
 git-checkout-main:
     git checkout main
+git-checkout-devel:
+    git checkout devel
 git-push-force:
     bash -c "git push --force origin HEAD"
 cabal-install:
