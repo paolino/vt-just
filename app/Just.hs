@@ -2,7 +2,6 @@
 {-# LANGUAGE ImportQualifiedPost #-}
 {-# LANGUAGE PartialTypeSignatures #-}
 {-# LANGUAGE PolyKinds #-}
-{-# LANGUAGE RecursiveDo #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
 
@@ -14,13 +13,15 @@ import Control.Monad (void)
 import Control.Monad.Fix (MonadFix)
 import Control.Monad.IO.Class (MonadIO (..))
 import Data.Char (ord)
+import Data.Foldable (foldl')
 import Data.Functor (($>))
 import Data.Kind (Type)
+import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
 import Data.Maybe (catMaybes, listToMaybe)
 import Data.Time (getCurrentTime)
 import Graphics.Vty (Attr (attrForeColor), MaybeDefault (..))
-import Graphics.Vty.Attributes.Color (Color, green, red, white)
+import Graphics.Vty.Attributes.Color (Color, red, white)
 import Graphics.Vty.Input.Events qualified as V
 import ListOfListeners (listOfListeners)
 import Reflex
@@ -30,7 +31,9 @@ import Reflex
     , PostBuild
     , Reflex (Dynamic)
     , TriggerEvent
+    , attach
     , attachPromptlyDyn
+    , current
     , ffor
     , fforMaybe
     , getPostBuild
@@ -46,7 +49,6 @@ import Reflex.Vty
     , HasLayout
     , HasTheme
     , Refocus (..)
-    , boxTitle
     , col
     , def
     , fixed
@@ -56,9 +58,10 @@ import Reflex.Vty
     , localTheme
     , row
     , scrollableText
-    , singleBoxStyle
+    , textInput
     , tile
     )
+import Variables (varsWidget)
 
 getJustIO :: IO [(String, String)]
 getJustIO = do
@@ -116,6 +119,11 @@ getJust = do
         $ \_ -> liftIO getJustIO
     holdDyn [] listings
 
+mkCommand :: Map String String -> String -> String
+mkCommand vars cmd = "just " <> foldl' f "" (Map.toList vars) <> " " <> cmd
+  where
+    f sets (k, v) = sets <> " --set " <> k <> " '" <> v <> "'"
+
 justWidget
     :: forall m (t :: Type)
      . ( HasDisplayRegion t m
@@ -138,13 +146,16 @@ justWidget
 justWidget = row
     $ do
         o <- fmap (Map.fromList . zip [0 ..] . addLetters) <$> getJust
-        ev <- tile (fixed 50) $ do
-            ev' <- col $ listOfListeners $ fmap fst <$> o
-            pb <- getPostBuild
-            focus <- makeFocus
-            requestFocus $ pb $> Refocus_Id focus
-            i <- input
-            pure $ leftmost [Left <$> ev', Right <$> i]
+        (ev, vars) <- tile flex $ col $ do
+            ev' <- tile flex $ do
+                ev' <- col $ listOfListeners $ fmap fst <$> o
+                pb <- getPostBuild
+                focus <- makeFocus
+                requestFocus $ pb $> Refocus_Id focus
+                i <- input
+                pure $ leftmost [Left <$> ev', Right <$> i]
+            vars' <- tile flex $ col varsWidget
+            pure (ev', vars')
         let click = fforMaybe (attachPromptlyDyn o ev)
                 $ \(resolveInt, lre) -> case lre of
                     Left clicked -> listToMaybe $ do
@@ -161,7 +172,10 @@ justWidget = row
                         Map.lookup (ord c - ord 'a') resolveInt
                     _ -> Nothing
 
-        (out, err) <- runCommandSED $ ("just " <>) . snd <$> click
+        (out, err) <-
+            runCommandSED
+                $ uncurry mkCommand
+                    <$> attach (current vars) (snd <$> click)
         void
             $ grout flex
             $ do
@@ -178,6 +192,7 @@ justWidget = row
                         $ scrollableText
                             def
                             err
+        grout (fixed 4) $ void $ textInput def
 
 addLetters :: [(String, Cmd)] -> [(String, [Char])]
 addLetters = zipWith (\x (y, c) -> (x : ": " <> y, c)) ['a' ..]

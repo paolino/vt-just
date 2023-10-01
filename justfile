@@ -1,5 +1,5 @@
 
-commit_description := 'new patch full of dust'
+commit_description := 'new patch full'
 commit_name := 'n'
 
 default:
