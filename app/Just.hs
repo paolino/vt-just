@@ -135,52 +135,49 @@ justWidget
        , Adjustable t m
        )
     => m ()
-justWidget =
-    color green
-        $ row
-        $ do
-            rec o <- fmap (Map.fromList . zip [0 ..] . addLetters) <$> getJust
-                ev <- tile (fixed 50) $ do
-                    ev' <- col $ listOfListeners $ fmap fst <$> o
-                    pb <- getPostBuild
-                    focus <- makeFocus
-                    requestFocus $ pb $> Refocus_Id focus
-                    i <- input
-                    pure $ leftmost [Left <$> ev', Right <$> i]
-                let click = fforMaybe (attachPromptlyDyn o ev)
-                        $ \(resolveInt, lre) -> case lre of
-                            Left clicked -> listToMaybe $ do
-                                (_k, v) <-
-                                    itoList
-                                        $ Map.intersectionWith
-                                            (,)
-                                            resolveInt
-                                            clicked
-                                case v of
-                                    (c, V.EvMouseDown _ _ V.BLeft []) -> [c]
-                                    _ -> []
-                            Right (V.EvKey (V.KChar c) []) ->
-                                Map.lookup (ord c - ord 'a') resolveInt
-                            _ -> Nothing
+justWidget = row
+    $ do
+        o <- fmap (Map.fromList . zip [0 ..] . addLetters) <$> getJust
+        ev <- tile (fixed 50) $ do
+            ev' <- col $ listOfListeners $ fmap fst <$> o
+            pb <- getPostBuild
+            focus <- makeFocus
+            requestFocus $ pb $> Refocus_Id focus
+            i <- input
+            pure $ leftmost [Left <$> ev', Right <$> i]
+        let click = fforMaybe (attachPromptlyDyn o ev)
+                $ \(resolveInt, lre) -> case lre of
+                    Left clicked -> listToMaybe $ do
+                        (_k, v) <-
+                            itoList
+                                $ Map.intersectionWith
+                                    (,)
+                                    resolveInt
+                                    clicked
+                        case v of
+                            (c, V.EvMouseDown _ _ V.BLeft []) -> [c]
+                            _ -> []
+                    Right (V.EvKey (V.KChar c) []) ->
+                        Map.lookup (ord c - ord 'a') resolveInt
+                    _ -> Nothing
 
-                (out, err) <- runCommandSED $ ("just " <>) . snd <$> click
+        (out, err) <- runCommandSED $ ("just " <>) . snd <$> click
+        void
+            $ grout flex
+            $ do
                 void
                     $ grout flex
-                    $ do
-                        void
-                            $ grout flex
-                            $ color white
-                            $ scrollableText
-                                def
-                                out
+                    $ color white
+                    $ scrollableText
+                        def
+                        out
 
-                        grout flex $ col $ do
-                            grout flex
-                                $ color red
-                                $ scrollableText
-                                    def
-                                    err
-            pure ()
+                grout flex $ col $ do
+                    grout flex
+                        $ color red
+                        $ scrollableText
+                            def
+                            err
 
 addLetters :: [(String, Cmd)] -> [(String, [Char])]
 addLetters = zipWith (\x (y, c) -> (x : ": " <> y, c)) ['a' ..]
