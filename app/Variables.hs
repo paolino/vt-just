@@ -6,7 +6,9 @@
 module Variables where
 
 import Command (runCommand)
-import Control.Monad.Fix (MonadFix)
+import Control.Concurrent (forkIO)
+import Control.Monad (void)
+import Control.Monad.Fix (MonadFix, fix)
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Data.Foldable (foldl')
 import Data.Kind (Type)
@@ -14,39 +16,49 @@ import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
 import Data.String (IsString (..))
 import Data.Text qualified as T
+import Data.Text.IO qualified as T
+import Data.Text.Zipper (TextZipper)
 import Data.Text.Zipper qualified as Z (value)
 import Data.Time (getCurrentTime)
 import Data.Void (Void)
 import Reflex
     ( Adjustable
     , MonadHold
-    , MonadSample (sample)
     , PerformEvent (Performable, performEvent)
     , PostBuild
     , Reflex (Dynamic, Event, constant, current)
     , TriggerEvent
     , attach
+    , attachWith
+    , ffor
     , fforMaybe
     , foldDyn
+    , getPostBuild
     , leftmost
     , listViewWithKey
+    , newTriggerEvent
+    , performEvent_
+    , sample
     , tickLossy
     )
 import Reflex.Vty
     ( HasDisplayRegion
+    , HasFocus
     , HasFocusReader
     , HasImageWriter
     , HasInput
     , HasTheme
     , TextInput (_textInput_userInput)
-    , TextInputConfig (_textInputConfig_initialValue)
+    , TextInputConfig (_textInputConfig_initialValue, _textInputConfig_modify)
     , def
     , flex
     , row
     , text
-    , textInput, HasFocus (makeFocus), tile
+    , textInput
+    , tile
     )
 import Reflex.Vty.Widget.Layout (HasLayout, fixed, grout)
+import System.IO (IOMode (..), openFile)
 import Text.Megaparsec
     ( ParseErrorBundle
     , Parsec
@@ -62,7 +74,6 @@ import Text.Megaparsec
 import Text.Megaparsec.Char (newline)
 import Text.Megaparsec.Char qualified as C
 import Text.Megaparsec.Char.Lexer qualified as L
-import Control.Monad (void)
 
 data Var = Var {varName :: String, varValue :: String}
     deriving (Show, Eq)
@@ -185,33 +196,38 @@ renderVars
        , HasFocus t m
        )
     => Dynamic (t :: Type) Vars
+    -> Event t RewriteChanges
     -> m (Event t (Map String ChangeVar))
-renderVars vars = do
+renderVars vars updates = do
     listViewWithKey vars $ \name value -> do
         grout (fixed 1) $ row $ do
-            grout flex $ text $ constant $ T.pack name
+            grout (fixed 20) $ text $ constant $ T.pack name
             grout (fixed 2) $ text $ constant $ T.pack "= "
-
-            initial <- sample $ current value
+            v <- sample $ current value
             t <-
                 tile flex
-                    $ do
-                        void makeFocus
-                        textInput
-                            $ def
-                                { _textInputConfig_initialValue = fromString initial
-                                }
+                    $ textInput
+                    $ def
+                        { _textInputConfig_initialValue = fromString v
+                        , _textInputConfig_modify =
+                            interpretRewrite name <$> updates
+                        }
 
             pure
                 $ fforMaybe (attach (current value) $ _textInput_userInput t)
-                $ \(old, new) ->
-                    if fromString old == new
-                        then Nothing
-                        else
-                            Just
-                                $ Add
-                                $ T.unpack
-                                $ Z.value new
+                $ \(old, new) -> diff old $ T.unpack $ Z.value new
+
+interpretRewrite :: String -> RewriteChanges -> TextZipper -> TextZipper
+interpretRewrite n m = case Map.lookup n m of
+    Nothing -> id
+    Just Delete -> error "interpretRewrite: delete not implemented"
+    Just (Add x) -> const $ fromString x
+
+diff :: String -> String -> Maybe ChangeVar
+diff old new =
+    if fromString old == new
+        then Nothing
+        else Just $ Add new
 
 varsWidget
     :: ( Applicative m
@@ -228,10 +244,43 @@ varsWidget
        , MonadIO (Performable m)
        , HasLayout t m
        , HasInput t m
-       , HasFocusReader t m, HasFocus t m
+       , HasFocusReader t m
+       , HasFocus t m
        )
-    => m (Dynamic t Vars)
-varsWidget = do
-    rec vars <- varsState locals
-        locals <- renderVars vars
+    => FilePath
+    -> m (Dynamic t Vars)
+varsWidget fifoPath = do
+    fifo <- varsFifoSource fifoPath
+    rec let fifoUpdates = attachWith fifoToChanges (current vars) fifo
+        vars <- varsState $ leftmost [locals, fifoUpdates]
+        locals <- renderVars vars fifoUpdates
     pure vars
+
+fifoToChanges :: Vars -> [Var] -> RewriteChanges
+fifoToChanges vars fifos = Map.fromList $ do
+    Var k v <- fifos
+    case Map.lookup k vars of
+        Nothing -> [(k, Add v)]
+        Just v' -> [(k, Add v) | v /= v']
+
+varsFifoSource
+    :: ( Monad m
+       , PostBuild t m
+       , TriggerEvent t m
+       , PerformEvent t m
+       , MonadIO (Performable m)
+       )
+    => FilePath
+    -> m (Event t [Var])
+varsFifoSource fifoPath = do
+    pb <- getPostBuild
+    (e, t) <- newTriggerEvent
+    performEvent_ $ ffor pb $ \_ -> void $ liftIO $ forkIO $ do
+        fifo <- openFile fifoPath ReadWriteMode
+        fix $ \loop -> do
+            l <- T.hGetLine fifo
+            case parseVars $ T.unpack l of
+                Left _ -> loop
+                Right vars -> t vars
+            loop
+    pure e

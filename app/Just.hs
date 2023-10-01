@@ -119,8 +119,9 @@ getJust = do
         $ \_ -> liftIO getJustIO
     holdDyn [] listings
 
-mkCommand :: Map String String -> String -> String
-mkCommand vars cmd = "just " <> foldl' f "" (Map.toList vars) <> " " <> cmd
+mkCommand :: Map String String -> String -> (String, String)
+mkCommand vars cmd =
+    ("just " <> foldl' f "" (Map.toList vars) <> " " <> cmd, cmd)
   where
     f sets (k, v) = sets <> " --set " <> k <> " '" <> v <> "'"
 
@@ -142,11 +143,12 @@ justWidget
        , HasFocus t m
        , Adjustable t m
        )
-    => m ()
-justWidget = row
+    => FilePath
+    -> m ()
+justWidget fifoPath = row
     $ do
         o <- fmap (Map.fromList . zip [0 ..] . addLetters) <$> getJust
-        (ev, vars) <- tile flex $ col $ do
+        (ev, vars) <- tile (fixed 60) $ col $ do
             ev' <- tile flex $ do
                 ev' <- col $ listOfListeners $ fmap fst <$> o
                 pb <- getPostBuild
@@ -154,7 +156,7 @@ justWidget = row
                 requestFocus $ pb $> Refocus_Id focus
                 i <- input
                 pure $ leftmost [Left <$> ev', Right <$> i]
-            vars' <- tile flex $ col varsWidget
+            vars' <- tile flex $ col $ varsWidget fifoPath
             pure (ev', vars')
         let click = fforMaybe (attachPromptlyDyn o ev)
                 $ \(resolveInt, lre) -> case lre of
@@ -172,10 +174,14 @@ justWidget = row
                         Map.lookup (ord c - ord 'a') resolveInt
                     _ -> Nothing
 
-        (out, err) <-
-            runCommandSED
-                $ uncurry mkCommand
-                    <$> attach (current vars) (snd <$> click)
+        rec (out, err) <-
+                runCommandSED
+                    $ leftmost
+                        [ uncurry mkCommand
+                            <$> attach (current vars) (snd <$> click)
+                        , boot
+                        ]
+            boot <- fmap (const ("just default", "default")) <$> getPostBuild
         void
             $ grout flex
             $ do
