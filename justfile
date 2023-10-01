@@ -1,5 +1,6 @@
 
-x := '1'
+commit_description := 'new patch full of dust'
+commit_name := 'n'
 
 default:
     echo 'Hello, world!'
@@ -8,7 +9,7 @@ stg-init:
 stg-status:
     stg status
 stg-new:
-    stg new -m "new patch"
+    stg new "{{commit_name}}" -m "{{commit_description}}"
 stg-series:
     stg series -d
 stg-add:
@@ -48,7 +49,11 @@ git-push-force:
 cabal-install:
     cabal install --overwrite-policy=always
 git-reset-devel:
+    -git checkout main
+    -stg branch --delete --force devel
+    stg branch --create devel
     git checkout devel
-    git reset --hard main
 stg-clean:
     stg clean
+stg-rename:
+    stg rename "{{commit_name}}"
