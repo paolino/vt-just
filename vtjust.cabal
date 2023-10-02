@@ -66,6 +66,7 @@ executable vtjust
         ListOfListeners
         Just
         Command
+        Variables
 
     -- LANGUAGE extensions used by modules in this package.
     -- other-extensions:
@@ -82,6 +83,7 @@ executable vtjust
         , vty
         , reflex
         , directory
+        , megaparsec
 
     -- Directories containing source files.
     hs-source-dirs:   app

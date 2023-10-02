@@ -56,4 +56,5 @@ main :: IO ()
 main = mainWidget $ initManager_ $ withCtrlC $ do
     -- lsWidget
     -- experiment1Widget
-    justWidget
+
+    justWidget "vtjust.fifo"

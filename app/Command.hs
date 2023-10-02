@@ -91,7 +91,7 @@ accumHandle
        , MonadHold t m
        , MonadFix m
        )
-    => Event t (String, Handle)
+    => Event t ((String, String), Handle)
     -> m (Dynamic t Text)
 accumHandle eh = do
     (e, t) <- newTriggerEvent
@@ -103,7 +103,7 @@ accumHandle eh = do
             $ t
             $ Left
             $ "\n-- "
-                <> pack cmd
+                <> pack (snd cmd)
                 <> " ("
                 <> pack (show ct)
                 <> ") --\n"
@@ -127,10 +127,10 @@ accumHandle eh = do
 
 runCommandSE
     :: (PerformEvent t m, MonadIO (Performable m))
-    => Event (t :: Type) String
-    -> m (Event t (String, Handle, Handle))
+    => Event (t :: Type) (String, String)
+    -> m (Event t ((String, String), Handle, Handle))
 runCommandSE ecmd = performEvent . ffor ecmd $ \cmd -> do
-    (_, mout, merr, _Just) <- liftIO $ createProcess $ pipeOutProcess cmd
+    (_, mout, merr, _Just) <- liftIO $ createProcess $ pipeOutProcess $ fst cmd
     case (mout, merr) of
         (Just out, Just err) -> return (cmd, out, err)
         _ -> error "runCommandSE: unexpected"
@@ -142,7 +142,7 @@ runCommandSED
        , MonadHold t m
        , MonadFix m
        )
-    => Event (t :: Type) String
+    => Event (t :: Type) (String, String)
     -> m (Dynamic t Text, Dynamic t Text)
 runCommandSED ecmd = do
     ehs <- runCommandSE ecmd
