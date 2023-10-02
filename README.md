@@ -1,6 +1,6 @@
 # A terminal GUI for just command
 
-![image](https://github.com/paolino/just-a-guy/assets/56350/73722a35-3a93-42fb-a122-e1868169d26c)
+![image](https://github.com/paolino/vt-just/assets/56350/6080727e-12c7-4e33-9a7b-b9d9c8b989eb)
 
 ## Prerequisites
  - just, https://github.com/casey/just
