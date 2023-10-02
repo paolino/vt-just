@@ -175,7 +175,7 @@ varsState changes = do
                 $ \(s, vs) ->
                     let
                         s' = mkVars vs
-                     in
+                    in
                         if s' == varsConfig s then Nothing else Just s'
     pure $ applyVarsState <$> state
 

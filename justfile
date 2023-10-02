@@ -69,7 +69,7 @@ stg-report-commit-name-and-desc:
 stg-report-commit-name-and-desc-pipe:
     stg series -d | awk -f stgCommitNameAndDesc.sh
 format:
-    fourmolu -i src/**/*.hs
+    fourmolu -i app
 git-merge-to-main:
     git checkout main
     git merge --ff-only devel
