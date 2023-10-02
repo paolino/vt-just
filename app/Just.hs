@@ -1,5 +1,6 @@
 {-# LANGUAGE BlockArguments #-}
 {-# LANGUAGE ImportQualifiedPost #-}
+{-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE PartialTypeSignatures #-}
 {-# LANGUAGE PolyKinds #-}
 {-# LANGUAGE ScopedTypeVariables #-}
@@ -13,16 +14,15 @@ import Control.Monad (void)
 import Control.Monad.Fix (MonadFix)
 import Control.Monad.IO.Class (MonadIO (..))
 import Data.Char (ord)
-import Data.Foldable (foldl')
 import Data.Functor (($>))
 import Data.Kind (Type)
-import Data.Map.Strict (Map)
 import Data.Map.Strict qualified as Map
 import Data.Maybe (catMaybes, listToMaybe)
 import Data.Time (getCurrentTime)
 import Graphics.Vty (Attr (attrForeColor), MaybeDefault (..))
 import Graphics.Vty.Attributes.Color (Color, red, white)
 import Graphics.Vty.Input.Events qualified as V
+import Just.Type (Just (..), renderJust)
 import ListOfListeners (listOfListeners)
 import Reflex
     ( Adjustable
@@ -31,8 +31,8 @@ import Reflex
     , PostBuild
     , Reflex (Dynamic)
     , TriggerEvent
-    , attach
     , attachPromptlyDyn
+    , attachWith
     , current
     , ffor
     , fforMaybe
@@ -119,12 +119,6 @@ getJust = do
         $ \_ -> liftIO getJustIO
     holdDyn [] listings
 
-mkCommand :: Map String String -> String -> (String, String)
-mkCommand vars cmd =
-    ("just " <> foldl' f "" (Map.toList vars) <> " " <> cmd, cmd)
-  where
-    f sets (k, v) = sets <> " --set " <> k <> " '" <> v <> "'"
-
 justWidget
     :: forall m (t :: Type)
      . ( HasDisplayRegion t m
@@ -144,9 +138,11 @@ justWidget
        , Adjustable t m
        )
     => FilePath
+    -> FilePath
     -> m ()
-justWidget fifoPath = row
+justWidget fifoPath justPath = row
     $ do
+        let justDef = JustCommand justPath mempty ""
         o <- fmap (Map.fromList . zip [0 ..] . addLetters) <$> getJust
         (ev, vars) <- tile (fixed 60) $ col $ do
             ev' <- tile flex $ do
@@ -177,11 +173,19 @@ justWidget fifoPath = row
         rec (out, err) <-
                 runCommandSED
                     $ leftmost
-                        [ uncurry mkCommand
-                            <$> attach (current vars) (snd <$> click)
+                        [ attachWith
+                            do
+                                \variables command ->
+                                    ( renderJust
+                                        $ justDef{variables, command}
+                                    , command
+                                    )
+                            do current vars
+                            do snd <$> click
                         , boot
                         ]
-            boot <- fmap (const ("just default", "default")) <$> getPostBuild
+            let defCommand = renderJust $ justDef{command = "default"}
+            boot <- fmap (const (defCommand, "default")) <$> getPostBuild
         void
             $ grout flex
             $ do

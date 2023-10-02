@@ -1,11 +1,15 @@
+{-# LANGUAGE BlockArguments #-}
 {-# LANGUAGE ImportQualifiedPost #-}
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE RecordWildCards #-}
 
 module Main where
 
 import Control.Monad.Fix (MonadFix)
+import Data.Maybe (fromMaybe)
 import Graphics.Vty qualified as V
 import Just (justWidget)
+import Options (Options (..), parseOptions)
 import Reflex
     ( Reflex (Event)
     , fforMaybe
@@ -53,8 +57,10 @@ withCtrlC f = do
         _ -> Nothing
 
 main :: IO ()
-main = mainWidget $ initManager_ $ withCtrlC $ do
-    -- lsWidget
-    -- experiment1Widget
+main = do
+    Options{..} <- parseOptions
 
-    justWidget "vtjust.fifo"
+    mainWidget $ initManager_ $ withCtrlC $ do
+        justWidget
+            do fromMaybe "vtjust.fifo" fifo
+            do fromMaybe "justfile" justfile

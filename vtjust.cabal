@@ -67,6 +67,8 @@ executable vtjust
         Just
         Command
         Variables
+        Options
+        Just.Type
 
     -- LANGUAGE extensions used by modules in this package.
     -- other-extensions:
@@ -84,6 +86,7 @@ executable vtjust
         , reflex
         , directory
         , megaparsec
+        , optparse-applicative
 
     -- Directories containing source files.
     hs-source-dirs:   app
